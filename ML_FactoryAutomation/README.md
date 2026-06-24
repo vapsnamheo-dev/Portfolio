@@ -47,16 +47,9 @@
 
 ## 2. 데모 영상
 
-<!-- 녹화된 mp4 파일을 아래 경로에 업로드하세요: ML_FactoryAutomation/assets/demo.mp4 -->
+<video src="./assets/FactoryAutomation.mp4" controls width="100%"></video>
 
-> **영상 추가 방법**
-> 1. GitHub 이슈 또는 PR 댓글 창에 mp4 파일을 드래그&드롭
-> 2. 생성된 URL(`https://github.com/…/assets/…mp4`)을 위 링크로 교체
-> 3. 또는 `ML_FactoryAutomation/assets/demo.mp4` 로 직접 업로드 후 아래 태그 사용:
->
-> ```html
-> <video src="./assets/demo.mp4" controls width="100%"></video>
-> ```
+> 영상이 재생되지 않으면 [FactoryAutomation.mp4](./assets/FactoryAutomation.mp4) 를 직접 다운로드하세요.
 
 ---
 
