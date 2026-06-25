@@ -13,6 +13,8 @@
 |:---:|---|---|---|:---:|
 | 1 | [🛠️ PdM-Guard — 설비 고장 예측 시스템](./PdM-Guard/README.md) | 설비 센서 데이터로 고장 확률 예측 · XGBoost + Streamlit 웹앱 · Gemini AI 해설 | Python · XGBoost · Streamlit | 개인프로젝트 |
 | 2 | [🧠 DopaCheck — 도파민 디톡스 서비스](./DopaCheck/README.md) | 배달·SNS·게임 활동 기록 + AI 코치 + 챌린지 도파민 디톡스 Flask 웹 서비스 · 담당: 홈 모달 UI/UX · 배달 상세 · 보안 개선 | Python · Flask · Claude Vision · MySQL | 팀프로젝트 |
+| 3 | [📅 MeetingHub — 회의실 예약·회의록 관리](./MeetingHub/README.md) | 회의실 예약 + 회의록 작성·조회 + AI 분석 통합 풀스택 서비스 · 담당: 회의록 작성·조회·회의상세 | Python · Flask · Next.js | 팀프로젝트 |
+| 4 | [🎙️ realtime-translator — 실시간 회의 통역](./realtime-translator/README.md) | Zoom/Meet 시스템 오디오 → 로컬 STT → Groq 번역·답변 추천 · PyQt6 반투명 오버레이 | Python · faster-whisper · Groq API · PyQt6 | 개인프로젝트 |
 
 ---
 
@@ -20,13 +22,14 @@
 
 | 영역 | 기술 |
 |---|---|
-| ML / AI | scikit-learn · XGBoost · SHAP · Google Gemini API |
-| 데이터 | pandas · numpy · matplotlib · seaborn |
-| 웹 백엔드 | Flask · SQLAlchemy |
+| ML / AI | scikit-learn · XGBoost · SHAP · TensorFlow · LSTM/GRU · Google Gemini API · Groq API |
+| 데이터 | pandas · numpy · matplotlib · seaborn · plotly |
+| 웹 백엔드 | Flask · Next.js · SQLAlchemy · REST API |
 | 웹앱 | Streamlit |
+| 데스크톱 앱 | PyQt6 · WASAPI 루프백 · faster-whisper |
 | DB | SQLite · MySQL · PostgreSQL |
 | 보안 | XSS 방어 · 외부 리소스 차단 · DOM 안전 삽입 |
-| 개발 환경 | Python · Git · GitHub Actions · Streamlit Community Cloud · Heroku |
+| 개발 환경 | Python · Git · GitHub Actions · Streamlit Community Cloud |
 
 ---
 
