@@ -9,13 +9,14 @@
 
 ## 프로젝트 목록
 
-| # | 프로젝트 | 설명 | 기술 스택 | 구분 |
-|:---:|---|---|---|:---:|
-| 1 | [PdM-Guard — 설비 고장 예측](./PdM-Guard/README.md) | 설비 센서 데이터로 고장 확률 예측 · XGBoost + Streamlit + Gemini AI | Python · XGBoost · Streamlit | 개인프로젝트 |
-| 2 | [DopaCheck — 도파민 디톡스](./DopaCheck/README.md) | 배달·SNS·게임 활동 기록 + AI 코치 · 담당: 홈 UI/UX · 보안 개선 | Python · Flask · Claude Vision · MySQL | 팀프로젝트 |
-| 3 | [MeetingHub — 회의실·회의록 관리](./MeetingHub/README.md) | 회의실 예약 + 회의록 작성·조회 + AI 분석 · 담당: 회의록 CRUD | Python · Flask · Next.js | 팀프로젝트 |
-| 4 | [realtime-translator — 실시간 통역](./realtime-translator/README.md) | 시스템 오디오 → STT → Groq 번역·답변 · PyQt6 반투명 오버레이 | Python · faster-whisper · Groq · PyQt6 | 개인프로젝트 |
-| 5 | [DL_FactoryAutomation — 딥러닝 스마트팩토리](./DL_FactoryAutomation/README.md) | FEMTO 베어링 RUL 예측(LSTM/GRU) + Milling 공구마모 분류(1D-CNN) · 배치 튜닝 실험 · Streamlit 대시보드 | Python · TensorFlow · Keras · Streamlit | 개인프로젝트 |
+| # | 프로젝트 | 설명 | 기술 스택 | 구분 | 데모 |
+|:---:|---|---|---|:---:|:---:|
+| 1 | [PdM-Guard — 설비 고장 예측](./ML_FactoryAutomation/README.md) | 설비 센서 데이터로 고장 확률 예측 · XGBoost + Streamlit + Gemini AI | Python · XGBoost · Streamlit | 개인프로젝트 | [🔗 Live](https://mlfactoryautomation.streamlit.app/) |
+| 2 | [DopaCheck — 도파민 디톡스](./DopaCheck/README.md) | 배달·SNS·게임 활동 기록 + AI 코치 · 담당: 홈 UI/UX · 보안 개선 | Python · Flask · Claude Vision · MySQL | 팀프로젝트 | — |
+| 3 | [MeetingHub — 회의실·회의록 관리](./MeetingHub/README.md) | 회의실 예약 + 회의록 작성·조회 + AI 분석 · 담당: 회의록 CRUD | Python · Flask · Next.js | 팀프로젝트 | — |
+| 4 | [realtime-translator — 실시간 통역](./realtime-translator/README.md) | 시스템 오디오 → STT → Groq 번역·답변 · PyQt6 반투명 오버레이 | Python · faster-whisper · Groq · PyQt6 | 개인프로젝트 | — |
+| 5 | [DL_FactoryAutomation — 딥러닝 스마트팩토리](./DL_FactoryAutomation/README.md) | FEMTO 베어링 RUL 예측(LSTM/GRU) + Milling 공구마모 분류(1D-CNN) · 배치 튜닝 실험 · Streamlit 대시보드 | Python · TensorFlow · Keras · Streamlit | 개인프로젝트 | [🔗 Live](https://dlfactoryautomation.streamlit.app/) |
+| 6 | [LLM_FactoryAutomation — LLM 기반 예지보전 진단](./LLM_FactoryAutomation/README.md) | ML(XGBoost/RF)+DL(GRU/LSTM) 수치 예측 + RAG(FAISS·Chroma, Hybrid BM25+벡터) 유사사례 검색 결과를 Claude API로 자연어 정비 권고 보고서 자동 생성 | Python · Anthropic Claude API · FAISS · ChromaDB · Streamlit | 개인프로젝트 | [🔗 Live](https://llmfactoryautomation.streamlit.app/) |
 
 ---
 
@@ -24,7 +25,8 @@
 | 영역 | 기술 |
 |---|---|
 | 딥러닝 | TensorFlow · Keras · LSTM · GRU · BiLSTM · 1D-CNN · EarlyStopping · GroupKFold |
-| ML / AI | scikit-learn · XGBoost · SHAP · Google Gemini API · Groq API |
+| ML / AI | scikit-learn · XGBoost · SHAP · Anthropic Claude API · Google Gemini API · Groq API |
+| LLM / RAG | Claude API(Structured Output) · FAISS · ChromaDB · Hybrid RAG(BM25+벡터) |
 | 데이터 | pandas · numpy · matplotlib · seaborn · plotly |
 | 웹 백엔드 | Flask · Next.js · SQLAlchemy · REST API |
 | 웹앱 | Streamlit |
@@ -33,4 +35,4 @@
 
 ---
 
-*마지막 업데이트: 2026.06*
+*마지막 업데이트: 2026.07*
