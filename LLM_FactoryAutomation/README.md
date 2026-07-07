@@ -98,7 +98,7 @@ streamlit run app/streamlit_femto.py
 
 | 모델 | 유형 | 성능 |
 |---|---|---|
-| RandomForest/XGBoost | ML 열화 분류 | AUC 0.99, Recall 0.91 |
+| RandomForest/XGBoost | ML 열화 분류 | AUC 0.99, Recall 0.91 (GroupKFold, 베어링 단위 분리로 검증) |
 | GRU v2 (BN+LN) | DL RUL 예측 | OOS RMSE 810분 (v1 973분 대비 -16.75%) |
 | Autoencoder | 비지도 이상탐지 | AUC 0.968 (라벨 불필요) |
 | FAISS RAG (Level1) | 유사 사례 검색 | 코사인 유사도, 12-dim |
