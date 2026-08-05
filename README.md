@@ -17,6 +17,7 @@
 | 4 | [realtime-translator — 실시간 통역](./realtime-translator/README.md) | 시스템 오디오 → STT → Groq 번역·답변 · PyQt6 반투명 오버레이 | Python · faster-whisper · Groq · PyQt6 | 개인프로젝트 | — |
 | 5 | [DL_FactoryAutomation — 딥러닝 스마트팩토리](./DL_FactoryAutomation/README.md) | FEMTO 베어링 RUL 예측(GRU, OOS RMSE 836.6분 · 기준선 대비 12.5% 개선) + Autoencoder 이상탐지(AUC 0.968) + Milling 공구마모 분류(1D-CNN) · Streamlit 대시보드 | Python · TensorFlow · Keras · Streamlit | 개인프로젝트 | [🔗 Live](https://dlfactoryautomation.streamlit.app/) |
 | 6 | [LLM_FactoryAutomation — LLM 기반 예지보전 진단](./LLM_FactoryAutomation/README.md) | ML 열화 분류(AUC 0.99) + DL RUL 예측(GRU) + RAG(FAISS·Chroma Hybrid) 검색 결과를 이중 LLM(Claude API+로컬 Ollama)으로 자연어 정비 보고서 자동 생성 | Python · Anthropic Claude API · Ollama · FAISS · ChromaDB · Streamlit | 개인프로젝트 | [🔗 Live](https://llmfactoryautomation.streamlit.app/) |
+| 7 | [HajaCheck — AI 시설물 하자 점검](./HajaCheck/README.md) | 사진 업로드 → AI 하자 탐지·등급 산정 → LLM 보고서 초안 · 담당: 대시보드·시설물 관리 개발 + 미디어 파이프라인 오너 | Java · Spring Boot · React · PostgreSQL · LangChain | 팀프로젝트 | [🔗 Live](https://hajacheck.luma200ok.com) |
 
 ---
 
