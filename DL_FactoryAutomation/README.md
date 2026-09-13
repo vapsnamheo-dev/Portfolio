@@ -8,7 +8,7 @@ FEMTO 베어링 RUL(잔여 수명) 회귀 + Milling 공구 마모 이진 분류�
 
 | 과제 | 모델 | 최적 성능 | 비고 |
 |---|---|---|---|
-| FEMTO RUL 예측 | GRU+BN+LN (batch=16) | OOS RMSE **836.6분** | 기준선 956분 대비 12.5% 향상 |
+| FEMTO RUL 예측 | GRU+BN+LN (batch=16) | OOS RMSE **810.4분** | v1(BN/LN 미적용) 973.5분 대비 16.75% 개선 |
 | FEMTO 열화 분류 | RandomForest | AUC **0.99** | GroupKFold, F1 최적 임계값 |
 | Autoencoder (비지도) | Dense 64→32→16→32→64 | AUC **0.968** | 라벨 없이 RF의 98% 성능 |
 | Milling 분류 | 1D-CNN | — | 클래스 불균형 처리 |
@@ -59,7 +59,7 @@ FEMTO 베어링 RUL(잔여 수명) 회귀 + Milling 공구 마모 이진 분류�
 | 64 | 1114.4분 | — |
 | 128 | 1054.3분 | — |
 
-> **OOS RMSE 각주**: Out-Of-Sample RMSE — 학습 미사용 테스트셋 기준. 기준선 956분은 그리드서치 챔피언(window=20, units=32, dropout=0.1)의 고정 참조값으로, batch=32 재실험값(1002.6분)과 다름. 동일 설정도 시드 변동으로 실행마다 결과 상이.
+> **OOS RMSE 각주**: Out-Of-Sample RMSE — 학습 미사용 테스트셋 기준. 기준선 956분은 그리드서치 챔피언(window=20, units=32, dropout=0.1)의 고정 참조값으로, batch=32 재실험값(1002.6분)과 다름. 동일 설정도 시드 변동으로 실행마다 결과 상이. 이 표의 836.6분은 배치사이즈 서브튜닝 실행값이며, 위 "핵심 결과"의 810.4분(v1 973.5분 대비 -16.75%)은 BN+LN 아키텍처 비교 실행(`models/femto_dl_bn_compare_results.json`)의 최종 결과로 더 낮은(우수한) 값입니다.
 
 ---
 

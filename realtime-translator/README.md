@@ -30,10 +30,10 @@
 | 기능 | 설명 |
 |---|---|
 | 🎤 **실시간 STT** | WASAPI 루프백으로 시스템 오디오 캡처 → `faster-whisper` 로컬 모델로 영어 인식 |
-| 🌐 **실시간 번역** | Groq API (`llama-3.3-70b-versatile`)로 영→한 즉시 번역, 오버레이 왼쪽에 표시 |
-| 💬 **답변 추천** | `Ctrl+Space` 또는 버튼 → 최근 대화 컨텍스트 기반 영어 답변 3개 + 한국어 설명 |
+| 🌐 **실시간 번역** | Groq API (`llama-3.1-8b-instant`)로 영→한 즉시 번역, 오버레이 왼쪽에 표시 |
+| 💬 **답변 추천** | `Ctrl+Space` 또는 버튼(수동) — 최근 대화 컨텍스트 기반 영어 답변 3개 + 한국어 설명. "자동 답변" 토글 ON 시(기본값 OFF) 확정 문장마다 자동 호출 |
 | 🪟 **오버레이 UI** | PyQt6 반투명 창 (항상 위, 알파 0.85), 화면 상단 고정, Zoom/Meet 위에 표시 |
-| ⚡ **저지연 설계** | `base` 모델 기준 ~1~2초 내 자막, GPU 있으면 ~1초 이내 |
+| ⚡ **저지연 설계** | 로컬 STT(네트워크 왕복 없음, GPU 우선/CPU 폴백) · 0.6초 간격 부분(partial) 인식 · 0.45초 무음 시 문장 확정 · 오디오/STT/번역 3-스레드+큐 파이프라인 · 16kHz 다운샘플링 — *실측 벤치마크는 수행하지 않음* |
 | 🔒 **완전 무료** | STT = 로컬 faster-whisper, 번역/답변 = Groq 무료 API (유료 과금 없음) |
 
 ---
@@ -61,7 +61,7 @@ overlay.py        ── PyQt6 반투명 오버레이 표시
 | `main.py` | 진입점 · 스레드 파이프라인 연결 |
 | `audio_capture.py` | WASAPI 루프백(시스템 오디오) 캡처 → 16kHz mono |
 | `stt.py` | faster-whisper 스트리밍 STT (부분/확정 자막) |
-| `llm.py` | Groq API — 영→한 번역 + 영어 답변 추천 3개 |
+| `llm.py` | Groq API(`llama-3.1-8b-instant` 단일 모델) — 영→한 번역 + 영어 답변 추천 3개. `GROQ_MODEL`(70B)은 `config.py`에 정의만 되고 실제 호출에는 미사용 |
 | `overlay.py` | PyQt6 반투명 오버레이 UI (항상 위, 핫키 처리) |
 | `config.py` | 설정값 관리 (.env 로드, Whisper 모델·지연시간 등) |
 | `.env.example` | 환경변수 템플릿 (GROQ_API_KEY 등) |
@@ -74,7 +74,7 @@ overlay.py        ── PyQt6 반투명 오버레이 표시
 |---|---|
 | **오디오 캡처** | PyAudioWPatch (WASAPI 루프백, Windows 전용) |
 | **음성 인식(STT)** | faster-whisper (로컬, `base`/`small` 모델) |
-| **번역 / 답변 추천** | Groq API (`llama-3.3-70b-versatile` / `llama-3.1-8b-instant`) |
+| **번역 / 답변 추천** | Groq API (`llama-3.1-8b-instant` 단일 모델 — `GROQ_MODEL`=70B는 config에 정의만 되고 코드에서는 미사용) |
 | **UI** | PyQt6 (반투명 오버레이, 항상 위, 전역 핫키) |
 | **설정 관리** | python-dotenv |
 | **언어** | Python 3.11 |

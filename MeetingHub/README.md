@@ -21,7 +21,7 @@
 | **개발 기간** | 2026.06 |
 | **팀 구성** | AI 심화 과정 팀프로젝트 |
 | **핵심 개념** | 회의실 예약 → 회의록 작성 → AI 분석 통합 워크플로우 |
-| **아키텍처** | Flask 백엔드 REST API + Next.js 14 App Router 프론트엔드 |
+| **아키텍처** | Flask 백엔드 REST API + Next.js 16 App Router 프론트엔드 |
 
 ---
 
@@ -31,8 +31,8 @@
 |---|---|
 | 📋 **회의록 작성** | 예약된 회의에 연결된 회의록 작성, 중복 생성 방지 정책 |
 | 🔍 **회의록 조회** | 단건(회의 정보·작성자 함께) / 목록(회의 제목·날짜 함께) |
-| ✏️ **회의록 수정** | 작성자 본인 또는 권한자만 수정 가능, 빈 내용 저장 방지 |
-| 📅 **회의 상세** | 회의 정보(제목/시간/회의실/참석자) + 회의록 + AI 분석 결과 통합 표시 |
+| ✏️ **회의록 수정** | 작성자 본인만 수정 가능(역할 기반 예외 없음), 빈 내용 저장 방지 |
+| 📅 **회의 상세** | 회의 정보(제목/시간/상태/참석자) + 회의록 + AI 분석 결과 통합 표시 |
 | 🤖 **AI 분석 연동** | 회의록 저장 후 `minute_id` 기반 AI 분석 트리거 |
 | 🏢 **기업 격리** | 본인 기업 회의의 회의록만 조회 가능 (크로스 테넌트 차단) |
 
@@ -66,13 +66,15 @@
 - 회의 제목·날짜와 함께 회의록 목록 표시
 - 본인 기업 회의의 회의록만 필터링 (기업 격리)
 
-### 3. 회의 상세 화면 (`frontend/src/app/(dashboard)/reservations/[id]/`)
-- 회의 정보(제목/시간/회의실/참석자) + 회의록 + AI 분석 결과를 한 페이지에 통합
-- AI 분석 트리거 버튼 → `/api/ai/analyze` 호출
-- `minute_id`를 AI 분석 엔드포인트에 전달하는 연결 구현
+### 3. 회의록 UI 컴포넌트 및 AI 분석 트리거
+
+- `frontend/src/components/minutes/` — MinuteEditor·MinuteViewer 컴포넌트 작성(본인 작성, 이후 변경 없음)
+- 회의 상세 화면(`reservations/[id]/`)의 AI 분석 트리거 로직 `handleAnalyze()` → `/api/ai/analyze` 호출, `minute_id` 전달(본인 작성, 현재도 유지됨)
+- 단, 회의록 목록·상세(`minutes/`)와 회의 상세 화면(`reservations/[id]/`)의 초기 골격은 본인이 PR #8로 구현했으나, 이후 화면 레이아웃과 백엔드 연결은 팀원(김승현·이은석)이 대폭 재작성 — 현재 코드 기준 두 화면의 레이아웃 대부분은 팀원 작성분
 
 ### 4. 회의록 수정 (`update`)
-- 작성자 본인 또는 권한자만 수정 가능하도록 권한 통제
+
+- 작성자 본인만 수정·삭제 가능 (`created_by` 일치 검사). 시스템에 ADMIN/MEMBER 역할 개념은 있으나(`tenant_guard.member_role`), 회의록 수정/삭제 로직에는 연동되어 있지 않음
 - 빈 내용 저장 방지
 
 ---
@@ -82,10 +84,10 @@
 | 파일 | 역할 |
 |---|---|
 | `backend/app/routes/minutes.py` | 회의록 CRUD REST API 라우트 |
-| `backend/app/services/minute_service.py` | 회의록 비즈니스 로직 (작성/조회/수정/권한 검사) |
-| `frontend/src/app/(dashboard)/minutes/` | 회의록 목록 · 상세 화면 |
-| `frontend/src/app/(dashboard)/reservations/[id]/` | 회의 상세 화면 (회의록 진입점, AI 분석 연동) |
-| `frontend/src/components/minutes/` | 회의록 에디터 UI 컴포넌트 |
+| `backend/app/services/minute_service.py` | 회의록 비즈니스 로직 (작성/조회/수정/삭제) |
+| `frontend/src/components/minutes/` | 회의록 에디터·뷰어 UI 컴포넌트 (본인 작성, 이후 변경 없음) |
+| `frontend/src/app/(dashboard)/reservations/[id]/` | AI 분석 트리거 로직 `handleAnalyze()`만 본인 작성 — 화면 레이아웃은 이후 팀원이 재작성 |
+| `frontend/src/app/(dashboard)/minutes/` | 초기 골격(PR #8) 본인 작성 — 이후 팀원이 대폭 재작성 |
 
 ---
 
@@ -103,7 +105,7 @@
 | 영역 | 기술 |
 |---|---|
 | **백엔드** | Python 3.11 · Flask · REST API |
-| **프론트엔드** | Next.js 14 (App Router) · TypeScript |
+| **프론트엔드** | Next.js 16 (App Router) · TypeScript |
 | **DB** | meeting_minutes · meeting_reservations (JOIN) |
 | **인증/권한** | JWT 기반 사용자 인증, 기업 격리 |
 | **AI 연동** | AI 분석 API 호출 (minute_id 기반) |
