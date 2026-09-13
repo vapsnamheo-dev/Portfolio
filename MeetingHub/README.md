@@ -56,6 +56,8 @@
 - 한 회의에 회의록 1개 정책 — 중복 생성 방지 로직 구현
 - 빈 내용 저장 방지 유효성 검사
 
+※ 백엔드 minute_service.py CRUD·권한검사 로직은 본인 작성. 이후 팀원 통합 수정 2건 — create()의 user_id 전달 파라미터(김승현, 2줄), 내부 헬퍼 _company_id()를 공용 tenant_guard.require_member_company()로 교체(리팩터링, 로직 변경 없음).
+
 ### 2. 회의록 조회 (`get`, `list`)
 
 #### 단건 조회
