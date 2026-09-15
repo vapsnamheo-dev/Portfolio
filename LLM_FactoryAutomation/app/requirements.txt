@@ -1,0 +1,20 @@
+streamlit>=1.35
+pandas>=2.0
+numpy>=1.24,<2.0
+scikit-learn==1.7.2
+tensorflow-cpu
+matplotlib>=3.7
+seaborn>=0.13
+plotly>=5.18
+joblib>=1.3
+faiss-cpu
+langchain
+langchain-community
+langchain-text-splitters
+chromadb
+# sentence-transformers 제거(2026-09-07) — PyTorch가 TensorFlow와 같은 프로세스에서
+# 충돌해 세그폴트를 일으키던 원인. 임베딩은 chromadb 내장 ONNX 런타임으로 대체
+# (src/femto_doc_rag.py _ChromaOnnxEmbeddings 참고) — chromadb가 이미 onnxruntime을
+# 의존성으로 가져오므로 신규 패키지 추가 없음.
+anthropic
+rank_bm25

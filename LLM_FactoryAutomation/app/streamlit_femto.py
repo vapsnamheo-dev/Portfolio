@@ -4,9 +4,21 @@ ML만 적용시(열화 분류) + LSTM RUL 예측 결합 시스템
 """
 from __future__ import annotations
 
+import os
+# TensorFlow와 PyTorch(sentence-transformers 경유)가 같은 프로세스에 로드될 때
+# 번들 OpenMP 런타임 중복 초기화로 세그폴트가 나는 것을 방지 (Streamlit Cloud에서
+# "AI 정비 권고 보고서 생성" 버튼 클릭 시 전체 크래시 발생 — 반드시 다른 import보다 먼저 설정)
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+# HuggingFace tokenizers가 fork 후 백그라운드 스레드를 새로 여는 것도 컨테이너
+# 환경에서 별도 크래시/행 원인이 되므로 함께 비활성화한다(문서 RAG 임베딩 모델이
+# 쓰는 sentence-transformers 경유).
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 import json
 import pickle
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -34,13 +46,22 @@ ROOT = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = ROOT / "data" / "FEMTO_processed"
 MODEL_DIR = ROOT / "models"
 
+# ml_scaler(models/femto_scaler.pkl) 등 사전 학습된 아티팩트가 고정한 9-피처 스키마.
+# data/FEMTO_processed/selected_features.csv는 배포 환경마다 VIF 분석으로 새로
+# 생성되어 피처 개수·순서가 달라질 수 있으므로(예: Cloud 재배포 시 8개로 축소),
+# 슬라이더 입력 기반 단일/배치 예측에는 이 고정 목록만 사용한다.
+BASE_ML_FEATURES = [
+    "h_rms", "h_kurt", "h_skew", "h_crest",
+    "v_rms", "v_kurt", "v_skew", "v_crest", "temp_mean",
+]
+
 st.set_page_config(
     page_title="FEMTO-ST 베어링 예지보전",
     page_icon="⚙️",
     layout="wide",
 )
-st.title("⚙️ FEMTO-ST 베어링 예지보전 — ML+DL 통합 진단")
-st.caption("ML만 적용시(열화 분류) + LSTM(잔여수명 예측) 결합 시스템")
+st.title("⚙️ FEMTO-ST 베어링 예지보전 — ML+DL + LLM 통합 진단")
+st.caption("열화 분류(ML) + 잔여수명 예측(DL) + AI 정비 권고 (LLM) 결합 시스템")
 
 # ── ML 프로젝트 링크 ──────────────────────────────────────────────────────────
 _col_link, _col_spacer = st.columns([1, 5])
@@ -216,13 +237,14 @@ if df.empty:
     st.stop()
 
 # ── 탭 구성 ────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📊 데이터 탐색 (demo data loading)",
     "🤖 ML 성능",
     "🔮 DL RUL 예측",
     "🏭 통합 진단 (실시간·CSV 진단)",
     "🔬 DL 아키텍처 비교 (5종)",
     "💡 AI 정비 권고 (LLM)",
+    "🖼️ CNN 이미지 분류",
 ])
 
 # ════════════════════════════════════════════════════════
@@ -327,7 +349,7 @@ with tab2:
                 return "background-color: #FFFFCC"
             return "background-color: #CCFFCC"
 
-        styled = vif_df.style.applymap(_color_vif, subset=["VIF"])
+        styled = vif_df.style.map(_color_vif, subset=["VIF"])
         st.dataframe(styled, use_container_width=True)
         st.caption("VIF: 양호(녹색, <5) / 주의(노랑, 5~10) / 심각(빨강, ≥10)")
 
@@ -549,10 +571,7 @@ with tab4:
                     "health_idx": 1.0 / (1.0 + h_kurt + v_kurt),
                     "rms_ratio": h_rms / (v_rms + 1e-9),
                 }
-                _feat_list = features if features else [
-                    "h_rms", "h_kurt", "h_skew", "h_crest",
-                    "v_rms", "v_kurt", "v_skew", "v_crest", "temp_mean",
-                ]
+                _feat_list = BASE_ML_FEATURES
                 input_vals = np.array([[feature_values.get(f, 0.0) for f in _feat_list]])
 
                 try:
@@ -661,7 +680,7 @@ with tab4:
                         if "rms_ratio" not in up_df.columns:
                             up_df["rms_ratio"] = up_df["h_rms"] / (up_df["v_rms"] + 1e-9)
 
-                        _feat_list = features if features else REQUIRED + ["temp_mean"]
+                        _feat_list = BASE_ML_FEATURES
                         X_up = up_df[[f for f in _feat_list if f in up_df.columns]].fillna(0).values
 
                         if st.button("일괄 진단 실행", type="primary", key="batch_run"):
@@ -877,8 +896,36 @@ with tab6:
     # ── API 키 상태 표시 ──────────────────────────────────────────────────────
     import os as _os
     _has_api_key = bool(_os.environ.get("ANTHROPIC_API_KEY", ""))
-    if _has_api_key:
-        st.success("✅ ANTHROPIC_API_KEY 감지됨 — AI 보고서 생성 가능")
+
+    # ANTHROPIC_API_KEY 사용 여부 스위치. ON(기본값)=실제 Claude API 호출(과금 발생),
+    # OFF=키가 있어도 항상 Mock 모드로 동작(과금 없음).
+    _use_real_ai = st.sidebar.checkbox(
+        "ANTHROPIC_API_KEY 사용 (ON=실제 AI 호출·과금 / OFF=Mock 모드·무료)",
+        value=True,
+        help="ON이면 ANTHROPIC_API_KEY로 실제 Claude API를 호출해 과금이 발생합니다. "
+             "OFF로 끄면 키가 있어도 항상 Mock(규칙 기반) 모드로 동작해 과금되지 않습니다.",
+    )
+    _show_ai_cost = st.sidebar.checkbox(
+        "AI 비용 정보 화면에 표시",
+        value=True,
+        help="AI 보고서 생성 시 사용된 토큰 수·예상 비용을 화면에 표시할지 여부",
+    )
+    # 안전판 — Level-2 문서 RAG(Chroma+임베딩)는 TensorFlow가 이미 로드된 프로세스에서
+    # PyTorch 임베딩 모델을 불러오는 지점이라 이론상 가장 위험한 호출이다(위 KMP_*
+    # 주석 참고). 캐싱(femto_doc_rag._load_embeddings)으로 위험을 크게 줄였지만,
+    # 데모 중 재발 시 즉시 끌 수 있도록 토글을 남겨둔다 — 꺼도 Level-1(FAISS 유사사례)
+    # RAG와 보고서 생성 자체는 정상 동작한다.
+    _use_doc_rag = st.sidebar.checkbox(
+        "Level-2 문서 RAG 사용 (Chroma)",
+        value=True,
+        help="OFF로 끄면 정비 지식 문서 검색을 건너뛰고 ML/DL/Level-1 RAG만으로 보고서를 "
+             "생성합니다. 문서 RAG 관련 오류가 재발하면 끄고 재시도하세요.",
+    )
+
+    if _has_api_key and _use_real_ai:
+        st.success("✅ ANTHROPIC_API_KEY 사용: ON — 실제 AI 호출 (과금 발생)")
+    elif _has_api_key and not _use_real_ai:
+        st.info("ℹ️ ANTHROPIC_API_KEY 사용: OFF — 키는 있지만 Mock 모드로 동작합니다 (과금 없음).")
     else:
         st.warning(
             "⚠️ ANTHROPIC_API_KEY 미설정 — Mock 모드로 실행됩니다.  \n"
@@ -915,6 +962,12 @@ with tab6:
     st.subheader("2️⃣ AI 보고서 생성")
 
     if st.button("🤖 AI 정비 권고 보고서 생성", type="primary", key="llm_generate"):
+        # 세션 상태에 진단 완료 여부를 저장해, 아래 중첩된 'AI 답변 생성' 버튼을
+        # 클릭했을 때(재실행 시 이 버튼의 클릭 상태는 False로 초기화됨) 진단
+        # 결과 블록 전체가 사라지지 않고 유지되도록 한다.
+        st.session_state["_femto_llm_diag_generated"] = True
+
+    if st.session_state.get("_femto_llm_diag_generated"):
 
         with st.spinner("진단 중..."):
 
@@ -922,10 +975,7 @@ with tab6:
             _proba, _pred = 0.0, 0
             if ml_model is not None:
                 try:
-                    _feat_list = features if features else [
-                        "h_rms","h_kurt","h_skew","h_crest",
-                        "v_rms","v_kurt","v_skew","v_crest","temp_mean",
-                    ]
+                    _feat_list = BASE_ML_FEATURES
                     _input_arr = np.array([[_sensor_vals.get(f, 0.0) for f in _feat_list]])
                     _n_sc = ml_scaler.n_features_in_ if ml_scaler is not None else _input_arr.shape[1]
                     _X_sc = ml_scaler.transform(_input_arr[:, :_n_sc]) if ml_scaler is not None else _input_arr
@@ -936,10 +986,15 @@ with tab6:
 
             # ── DL RUL 예측 ───────────────────────────────────────────────────
             _rul_val = None
-            _feat_list2 = features if features else [
-                "h_rms","h_kurt","h_skew","h_crest",
-                "v_rms","v_kurt","v_skew","v_crest","temp_mean",
-            ]
+            # LSTM 경로는 슬라이더 스냅샷 1개를 30회 복제해 시퀀스처럼 흉내낸다(np.tile
+            # 아래) — 그런데 femto_dl_rul.make_sequences()의 실제 학습 데이터는 30분간
+            # "실제로 변화하는" 연속 시계열이라, 이 반복 입력은 학습 중 한 번도 본 적
+            # 없는 형태(분포 밖 입력)다. RF 경로는 반대로 train_rf_baseline()이
+            # `X[:, -1, :]`(윈도우 마지막 타임스텝, 즉 스냅샷 1개)로 학습되므로 지금과
+            # 동일한 단일 스냅샷 입력이 정상 사용법이다 — 저신뢰 플래그는 LSTM 경로에만
+            # 붙인다.
+            _rul_low_confidence = False
+            _feat_list2 = BASE_ML_FEATURES
             _input_arr2 = np.array([[_sensor_vals.get(f, 0.0) for f in _feat_list2]])
             if lstm_rul is not None and seq_scaler is not None:
                 try:
@@ -949,6 +1004,7 @@ with tab6:
                     _rul_val = max(0.0, float(
                         y_scaler.inverse_transform([[_r]])[0][0] if y_scaler else _r
                     ))
+                    _rul_low_confidence = True
                 except Exception:
                     pass
             if _rul_val is None and rf_rul is not None and seq_scaler is not None:
@@ -960,6 +1016,29 @@ with tab6:
                     ))
                 except Exception:
                     pass
+            # LLM·문서RAG 질의에는 저신뢰 RUL을 사실처럼 넘기지 않는다 — 화면에는
+            # 원값을 그대로 보여주되(투명성), 근거로 인용될 수 있는 곳에는 "미상"으로
+            # 취급해 보고서 문장이 노이즈를 확정적 사실처럼 서술하지 않게 한다.
+            _rul_for_llm = None if _rul_low_confidence else _rul_val
+
+            # ── 종합 판정 — ML+DL(신뢰 가능할 때만)을 규칙으로 미리 합쳐 단일 결론으로
+            # 표시한다. "ML=정상"과 "RUL=긴급"이 결론 없이 동시에 떠서 혼란을 주는
+            # 문제를 풀기 위한 것 — 이 값을 아래 LLM 호출에도 앵커로 넘겨, 보고서
+            # 문장이 여기서 낸 결론과 다른 말을 하지 않게 한다.
+            from src.femto_llm_guard import combined_verdict as _combined_verdict_fn
+            _verdict, _verdict_reason = _combined_verdict_fn(
+                ml_label=_pred, rul_min=_rul_val,
+                rul_alarm_min=float(rul_threshold), rul_reliable=not _rul_low_confidence,
+            )
+            _verdict_colors = {"정상": "#1E7B34", "주의": "#B8860B", "위험": "#C00000"}
+            st.markdown(
+                f"<div style='padding:10px 16px;border-radius:6px;background:"
+                f"{_verdict_colors.get(_verdict, '#2E75B6')}1A;border-left:4px solid "
+                f"{_verdict_colors.get(_verdict, '#2E75B6')};margin-bottom:8px'>"
+                f"<b>종합 판정: <span style='color:{_verdict_colors.get(_verdict, '#2E75B6')}'>"
+                f"{_verdict}</span></b> — {_verdict_reason}</div>",
+                unsafe_allow_html=True,
+            )
 
             # ── RAG 유사 사례 검색 ────────────────────────────────────────────
             _rag_cases = []
@@ -972,8 +1051,28 @@ with tab6:
             except Exception as _re:
                 st.caption(f"RAG 검색 미지원 (FAISS 미설치 또는 인덱스 없음): {_re}")
 
+            # ── RAG-Level2 정비 지식 문서 검색 (Chroma) ─────────────────────────
+            _doc_snippets: list[str] = []
+            _doc_query: str | None = None
+            if not _use_doc_rag:
+                st.caption("문서 RAG 비활성화됨 (사이드바 'Level-2 문서 RAG 사용' OFF)")
+            else:
+                try:
+                    from src.femto_doc_rag import retrieve_docs
+                    _rul_txt = f"{_rul_for_llm:.0f}분" if _rul_for_llm is not None else "미상"
+                    _doc_query = (
+                        f"열화 상태={'열화' if _pred == 1 else '정상'} "
+                        f"h_rms={_sensor_vals.get('h_rms', 0):.2f} "
+                        f"h_kurt={_sensor_vals.get('h_kurt', 0):.2f} "
+                        f"temp={_sensor_vals.get('temp_mean', 0):.1f} "
+                        f"잔여수명={_rul_txt} 상황에서 정비 권고 기준은?"
+                    )
+                    _doc_snippets = retrieve_docs(_doc_query, k=2)
+                except Exception as _de:
+                    st.caption(f"문서 RAG 미지원 (Chroma 미설치 또는 인덱스 없음): {_de}")
+
             # ── 중간 결과 표시 ────────────────────────────────────────────────
-            _c1, _c2, _c3 = st.columns(3)
+            _c1, _c2, _c3, _c4 = st.columns(4)
             with _c1:
                 st.metric("ML 열화 확률", f"{_proba*100:.1f}%")
                 if _pred == 1:
@@ -983,7 +1082,9 @@ with tab6:
             with _c2:
                 if _rul_val is not None:
                     st.metric("예측 잔여수명", f"{_rul_val:.0f} 분")
-                    if _rul_val <= rul_threshold:
+                    if _rul_low_confidence:
+                        st.warning("추정 신뢰도 낮음 — 단일 스냅샷 반복 입력(추세 데이터 아님)")
+                    elif _rul_val <= rul_threshold:
                         st.error(f"긴급 ({rul_threshold}분 이하)")
                     else:
                         st.success("양호")
@@ -993,33 +1094,131 @@ with tab6:
                 st.metric("RAG 유사 사례", f"{len(_rag_cases)}건")
                 if _rag_cases:
                     st.caption(f"최유사: {_rag_cases[0]['bearing']} ({_rag_cases[0]['similarity']:.1f}%)")
+            with _c4:
+                st.metric("정비 문서 근거", f"{len(_doc_snippets)}건")
+                if _doc_snippets:
+                    st.caption(f"{_doc_snippets[0][:30].strip()}...")
 
-            # ── LLM 보고서 생성 ───────────────────────────────────────────────
+            # ── RAG-Level2 LLM 자연어 답변 (선택, 로컬 Ollama 전용) ──────────────
+            with st.expander("🤖 AI 답변 생성 (RAG-Level2, 로컬 Ollama 전용)"):
+                st.caption(
+                    "로컬 Ollama 서버(gemma4:e2b, temperature=0.3)를 호출해 정비 지식 문서 "
+                    "기반 자연어 답변을 생성합니다. 클라우드 문서 검색(위 4개 지표)과 달리 "
+                    "**매 요청마다 로컬 LLM 추론이 실행되어 응답까지 수 초~수십 초가 걸리는 "
+                    "느린(블로킹) 호출**이며, Ollama가 없는 Streamlit Cloud 등 배포 환경에서는 "
+                    "동작하지 않습니다(로컬 실행 전용)."
+                )
+                if _doc_query is None:
+                    st.caption("문서 검색이 먼저 성공해야 사용할 수 있습니다 (위 '정비 문서 근거' 참고).")
+                elif st.button("AI 답변 생성", key="doc_rag_ask_btn"):
+                    with st.spinner("로컬 Ollama(gemma4:e2b) 응답 생성 중... (수 초~수십 초 소요)"):
+                        try:
+                            from src.femto_doc_rag import ask as _doc_rag_ask
+                            _t0 = time.time()
+                            _answer = _doc_rag_ask(_doc_query)
+                            _elapsed = time.time() - _t0
+                            st.success(f"응답 시간: {_elapsed:.1f}초")
+                            st.markdown(_answer)
+                        except Exception as _ae:
+                            st.error(
+                                f"AI 답변 생성 실패 — 로컬 Ollama 서버(http://localhost:11434)가 "
+                                f"실행 중인지 확인하세요: {_ae}"
+                            )
+
+            # ── LLM 보고서 생성 (동일 입력 재실행 시 재과금 방지 캐시) ────────────────
             st.divider()
             st.subheader("🤖 AI 진단 보고서")
+            # Streamlit은 페이지 내 어떤 위젯 조작에도 스크립트 전체를 재실행한다.
+            # 이 블록은 `_femto_llm_diag_generated` 플래그가 True인 동안 매 재실행마다
+            # 실행되므로, 캐시가 없으면 무관한 조작(체크박스 토글, 로컬 Ollama 버튼
+            # 클릭 등)만으로도 Claude API가 재호출되어 반복 과금된다. 센서값·임계값·
+            # ON/OFF 상태가 동일하면 캐시된 결과를 재사용해 실제 입력 변경 시에만
+            # 새로 호출한다.
+            _report_cache_key = (
+                tuple(sorted(_sensor_vals.items())),
+                round(float(ml_threshold), 4),
+                round(float(rul_threshold), 4),
+                _use_real_ai,
+                _use_doc_rag,
+            )
             try:
-                from src.femto_llm_report import generate_report, generate_report_mock
-                if _has_api_key:
-                    _report = generate_report(
+                # 3층 환각 방어 게이트(femto_llm_guard.py)를 통과한 경로로 전환 — 이전엔
+                # femto_llm_report.generate_report()를 직접 불러 가드를 우회하고 있었다.
+                # 가드는 dict(status/anomalies/action/similar_case_note/doc_basis)를
+                # 반환하므로 아래 렌더링도 자유 텍스트 대신 구조화 표시로 바꾼다.
+                from src.femto_llm_guard import generate_report_guarded, generate_report_guarded_mock
+                _report_cache = st.session_state.setdefault("_femto_llm_report_cache", {})
+                if _report_cache_key in _report_cache:
+                    _report, _usage = _report_cache[_report_cache_key]
+                elif _has_api_key and _use_real_ai:
+                    _report, _usage = generate_report_guarded(
                         sensor=_sensor_vals,
                         ml_prob=_proba, ml_label=_pred, ml_threshold=ml_threshold,
-                        rul_min=_rul_val, rul_alarm_min=float(rul_threshold),
+                        rul_min=_rul_for_llm, rul_alarm_min=float(rul_threshold),
                         rag_cases=_rag_cases,
+                        doc_snippets=_doc_snippets,
+                        return_usage=True,
+                        combined_verdict=_verdict,
                     )
+                    _report_cache[_report_cache_key] = (_report, _usage)
                 else:
-                    _report = generate_report_mock(
+                    _report = generate_report_guarded_mock(
                         sensor=_sensor_vals,
-                        ml_prob=_proba, ml_label=_pred,
-                        rul_min=_rul_val, rul_alarm_min=float(rul_threshold),
+                        ml_prob=_proba, ml_label=_pred, ml_threshold=ml_threshold,
+                        rul_min=_rul_for_llm, rul_alarm_min=float(rul_threshold),
+                        rag_cases=_rag_cases,
+                        doc_snippets=_doc_snippets,
+                        combined_verdict=_verdict,
                     )
+                    _usage = None
+                    _report_cache[_report_cache_key] = (_report, _usage)
+
+                if _usage and _show_ai_cost:
+                    st.caption(
+                        f"💰 입력 {_usage['input_tokens']}토큰 / 출력 {_usage['output_tokens']}토큰 "
+                        f"· 예상 비용 ${_usage['cost_usd']:.5f}"
+                    )
+
+                _status_colors = {
+                    "정상": "#1E7B34", "주의": "#B8860B", "위험": "#C00000", "판단불가": "#6c757d",
+                }
+                _status = _report.get("status", "판단불가")
+                _color = _status_colors.get(_status, "#2E75B6")
+                _anomalies = _report.get("anomalies") or []
+                _anomalies_html = "".join(f"<li>{a}</li>" for a in _anomalies) or "<li>해당 없음</li>"
+                _action = _report.get("action") or {}
                 st.markdown(
-                    f"<div style='background:#f0f7ff;border-left:4px solid #2E75B6;"
-                    f"padding:16px;border-radius:4px;white-space:pre-wrap;font-size:14px'>"
-                    f"{_report}</div>",
+                    f"<div style='background:#f0f7ff;border-left:4px solid {_color};"
+                    f"padding:16px;border-radius:4px;font-size:14px'>"
+                    f"<span style='background:{_color};color:white;padding:2px 10px;"
+                    f"border-radius:12px;font-weight:600'>{_status}</span>"
+                    f"<p style='margin-top:12px;margin-bottom:4px'><b>주요 이상 신호</b></p>"
+                    f"<ul style='margin-top:0'>{_anomalies_html}</ul>"
+                    f"<p><b>정비 권고</b> ({_action.get('urgency', '-')})<br>"
+                    f"{_action.get('description', '-')}</p>"
+                    f"<p><b>유사 사례 참고</b><br>{_report.get('similar_case_note', '-')}</p>"
+                    f"<p style='margin-bottom:0'><b>문서 근거</b><br>{_report.get('doc_basis', '-')}</p>"
+                    f"</div>",
                     unsafe_allow_html=True,
                 )
             except Exception as _le:
-                st.error(f"보고서 생성 오류: {_le}")
+                _le_msg = str(_le)
+                # Anthropic SDK는 크레딧 부족 시 BadRequestError(status_code=400)를 던지고
+                # 본문 메시지에 "credit balance"를 포함시킨다. status_code까지 함께 확인해
+                # 우연히 같은 문구가 섞인 무관한 예외를 오진하지 않도록 한다.
+                _status_code = getattr(_le, "status_code", None)
+                _is_credit_error = _status_code == 400 and "credit balance" in _le_msg.lower()
+                if _is_credit_error:
+                    st.error(
+                        "보고서 생성 오류: Anthropic 계정의 크레딧 잔액이 부족합니다.\n\n"
+                        "코드 버그가 아니라 결제 문제입니다 — "
+                        "https://console.anthropic.com 접속 → **Plans & Billing** → "
+                        "크레딧 충전 또는 결제수단 등록 후 다시 시도하세요.\n\n"
+                        "충전 전까지는 사이드바의 'ANTHROPIC_API_KEY 사용' 스위치를 꺼서 "
+                        "Mock 모드로 이용할 수 있습니다."
+                    )
+                else:
+                    st.error(f"보고서 생성 오류: {_le_msg}")
 
     # ── LLM 아키텍처 설명 ─────────────────────────────────────────────────────
     with st.expander("📐 Proposal A — LLM 통합 아키텍처 설명"):
@@ -1049,3 +1248,269 @@ with tab6:
 **환경변수**: `ANTHROPIC_API_KEY` 미설정 시 규칙 기반 Mock 보고서 자동 전환
 **RAG**: FAISS IndexFlatIP + 12-dim 특성 벡터 + 코사인 유사도 (`python -m src.femto_rag_search` 로 인덱스 빌드)
         """)
+
+# ════════════════════════════════════════════════════════
+# Tab 7: CNN 이미지 분류
+# ════════════════════════════════════════════════════════
+with tab7:
+    st.header("🖼️ CNN 이미지 분류 — 결함 판정")
+    st.caption("이미지 파일을 업로드하면 CNN 모델이 결함 여부를 판정합니다.")
+
+    # 모델 경로 후보
+    _cnn_candidates = [
+        MODEL_DIR / "casting_defect_cnn.keras",
+        MODEL_DIR / "casting_defect_cnn.h5",
+        MODEL_DIR / "image_cnn.keras",
+        MODEL_DIR / "image_cnn.h5",
+    ]
+    _cnn_model_path = next((p for p in _cnn_candidates if p.exists()), None)
+
+    _gradcam_data = None  # (model, arr, pred_idx, img_resized, h, w) — Grad-CAM용
+    col_upload, col_result = st.columns([1, 1])
+
+    with col_upload:
+        st.subheader("📂 이미지 파일 선택")
+
+        _img_mode = st.radio(
+            "입력 방법",
+            ["📁 파일 업로드", "📦 레포 샘플 불러오기"],
+            horizontal=True,
+            key="cnn_input_mode",
+        )
+
+        _IMG_DIR = ROOT / "demo data" / "Bearing_image_file"
+        _IMG_SAMPLES = {
+            "Stage 1 — 정상  (bearing_stage1_normal.png)":    _IMG_DIR / "bearing_stage1_normal.png",
+            "Stage 2 — 초기 열화  (bearing_stage2_early.png)": _IMG_DIR / "bearing_stage2_early.png",
+            "Stage 3 — 중기 열화  (bearing_stage3_moderate.png)": _IMG_DIR / "bearing_stage3_moderate.png",
+            "Stage 4 — 심각 열화  (bearing_stage4_severe.png)": _IMG_DIR / "bearing_stage4_severe.png",
+            "bearing_normal.png  (정상 베어링)":  _IMG_DIR / "bearing_normal.png",
+            "bearing_defect.png  (불량 베어링)":  _IMG_DIR / "bearing_defect.png",
+        }
+
+        # UploadedFile 호환 래퍼
+        class _RepoImageFile:
+            def __init__(self, path):
+                self._data = Path(path).read_bytes()
+                self.name = Path(path).name
+            def read(self): return self._data
+
+        uploaded = None
+
+        if _img_mode == "📁 파일 업로드":
+            st.session_state.pop("_cnn_repo_img", None)
+            uploaded = st.file_uploader(
+                "JPG / PNG / BMP 파일을 업로드하세요",
+                type=["jpg", "jpeg", "png", "bmp"],
+                help="제조 공정 이미지 파일 (예: 주조 결함 탐지용)",
+            )
+        else:
+            _avail_imgs = {k: v for k, v in _IMG_SAMPLES.items() if v.exists()}
+            if not _avail_imgs:
+                st.warning("레포에 샘플 이미지가 없습니다.")
+            else:
+                _sel_img = st.selectbox("샘플 이미지 선택", list(_avail_imgs.keys()), key="cnn_sample_sel")
+                if st.button("📦 레포 샘플 로드", key="load_sample_img"):
+                    st.session_state["_cnn_repo_img"] = str(_avail_imgs[_sel_img])
+                if "_cnn_repo_img" in st.session_state:
+                    uploaded = _RepoImageFile(st.session_state["_cnn_repo_img"])
+                else:
+                    st.info("위에서 샘플을 선택하고 [레포 샘플 로드] 버튼을 누르세요.")
+
+        if uploaded:
+            # _RepoImageFile: read() 항상 전체 반환 / UploadedFile: 직접 전달(버퍼 소모 방지)
+            _disp = uploaded.read() if isinstance(uploaded, _RepoImageFile) else uploaded
+            st.image(_disp, caption=f"선택: {uploaded.name}", use_container_width=True)
+
+    with col_result:
+        st.subheader("🔍 CNN 판정 결과")
+
+        if uploaded is None:
+            st.info("왼쪽에서 이미지를 업로드하면 CNN 판정이 시작됩니다.")
+        elif _cnn_model_path is None:
+            st.warning(
+                "CNN 이미지 분류 모델이 없습니다.  \n"
+                "아래 경로 중 하나에 모델을 저장하세요:  \n"
+                "- `models/casting_defect_cnn.keras`  \n"
+                "- `models/image_cnn.keras`  \n\n"
+                "**학습 방법**: `python -m src.femto_image_cnn` 실행  \n"
+                "(Casting Defect Dataset 필요)"
+            )
+            # 기본 픽셀 통계 표시 (모델 없어도 이미지 분석)
+            st.divider()
+            st.caption("기본 이미지 통계 (모델 없음 — 참고용)")
+            try:
+                from PIL import Image as PILImage
+                import numpy as np
+                import io
+                img_bytes = uploaded.read()
+                img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+                arr = np.array(img).astype(float)
+                st.metric("평균 밝기", f"{arr.mean():.1f}")
+                st.metric("표준편차", f"{arr.std():.1f}")
+                st.metric("이미지 크기", f"{img.width} × {img.height} px")
+                dark_ratio = float((arr.mean(axis=2) < 80).mean())
+                st.metric("어두운 영역 비율", f"{dark_ratio*100:.1f}%",
+                          help="어두운 영역이 많으면 결함 가능성 높음 (단순 추정)")
+                if dark_ratio > 0.3:
+                    st.error("⚠️ 어두운 영역 비율 높음 — 결함 의심 (CNN 모델로 정밀 판정 필요)")
+                else:
+                    st.success("✅ 이미지 밝기 정상 범위")
+            except Exception as e:
+                st.error(f"이미지 분석 실패: {e}")
+        else:
+            # CNN 모델 로드 & 예측
+            try:
+                import numpy as np
+                from PIL import Image as PILImage
+                import io
+                import tensorflow as tf
+
+                @st.cache_resource
+                def _load_cnn(path: str):
+                    return tf.keras.models.load_model(path)
+
+                cnn_model = _load_cnn(str(_cnn_model_path))
+                inp_shape = cnn_model.input_shape  # (None, H, W, C)
+                target_h  = inp_shape[1] or 224
+                target_w  = inp_shape[2] or 224
+                n_classes = cnn_model.output_shape[-1]
+                CLASS_NAMES = (
+                    ["정상(OK)", "결함(Defect)"] if n_classes == 2
+                    else [f"Class {i}" for i in range(n_classes)]
+                )
+
+                img_bytes = uploaded.read()
+                img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+                img_resized = img.resize((target_w, target_h))
+                arr = np.array(img_resized, dtype=np.float32) / 255.0
+                arr = np.expand_dims(arr, axis=0)
+
+                preds = cnn_model.predict(arr, verbose=0)[0]
+                pred_idx = int(np.argmax(preds))
+                confidence = float(preds[pred_idx])
+                pred_label = CLASS_NAMES[pred_idx] if pred_idx < len(CLASS_NAMES) else f"Class {pred_idx}"
+
+                if "결함" in pred_label or pred_idx > 0:
+                    st.error(f"🔴 판정: **{pred_label}**  ({confidence*100:.1f}%)")
+                else:
+                    st.success(f"🟢 판정: **{pred_label}**  ({confidence*100:.1f}%)")
+
+                st.divider()
+                st.caption("클래스별 확률")
+                prob_data = {CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class {i}": float(preds[i])
+                             for i in range(len(preds))}
+                import pandas as pd
+                prob_df = pd.DataFrame({"클래스": list(prob_data.keys()),
+                                        "확률": list(prob_data.values())})
+                st.dataframe(prob_df.style.format({"확률": "{:.4f}"}), use_container_width=True)
+                st.metric("모델", _cnn_model_path.name)
+                st.metric("입력 크기", f"{target_h}×{target_w} px")
+                _gradcam_data = (cnn_model, arr, pred_idx, img_resized, target_h, target_w, confidence, pred_label)
+
+            except Exception as e:
+                st.error(f"CNN 판정 실패: {e}")
+                st.code(str(e))
+
+    # ── Grad-CAM 전체 폭 섹션 ──────────────────────────────────
+    if _gradcam_data is not None:
+        _gc_model, _gc_arr, _gc_pred_idx, _gc_img, _gc_h, _gc_w, _gc_conf, _gc_label = _gradcam_data
+        st.divider()
+        st.subheader("🔥 Grad-CAM 시각화 — CNN이 '어디를 보았는지'")
+        st.caption(
+            "마지막 Conv 레이어의 Feature Map 기울기(Gradient)를 역전파하여 "
+            "예측에 영향을 준 영역을 히트맵으로 표시합니다.  "
+            "**빨간색 = 판정에 가장 중요한 영역 / 파란색 = 덜 중요한 영역**"
+        )
+        try:
+            import tensorflow as tf
+            import numpy as np
+            import matplotlib.pyplot as _plt
+            import matplotlib.cm as _cm
+            from PIL import Image as _PIL
+
+            def _gradcam_k3(_m, _arr, _pred_idx):
+                # Keras 3: conv 직후 watch → 이후 레이어만 tape 추적, with 안에서 gradient() 미호출
+                _lci = None
+                for _i, _l in enumerate(_m.layers):
+                    if isinstance(_l, tf.keras.layers.Conv2D):
+                        _lci = _i
+                if _lci is None:
+                    return None, None
+                with tf.GradientTape() as _tape:
+                    _x = tf.cast(_arr, tf.float32)
+                    _co = None
+                    for _i, _l in enumerate(_m.layers):
+                        if _i == _lci:
+                            _x = _l(_x); _co = _x; _tape.watch(_co)
+                        else:
+                            _x = _l(_x)
+                    _loss = _x[:, _pred_idx]
+                _gr = _tape.gradient(_loss, _co)
+                _pw = tf.reduce_mean(_gr, axis=(0, 1, 2)).numpy()
+                _cam = np.einsum("hwc,c->hw", _co[0].numpy(), _pw)
+                _cam = np.maximum(_cam, 0)
+                if _cam.max() > 0:
+                    _cam /= _cam.max()
+                return _cam, _pw
+
+            _cam, _pooled = _gradcam_k3(_gc_model, _gc_arr, _gc_pred_idx)
+
+            if _cam is None:
+                st.warning("Conv2D 레이어를 찾을 수 없어 Grad-CAM을 생성할 수 없습니다.")
+            else:
+
+                # ④ 원본 크기로 리사이즈
+                _cam_pil    = _PIL.fromarray((_cam * 255).astype(np.uint8)).resize(
+                    (_gc_w, _gc_h), _PIL.BILINEAR
+                )
+                _cam_norm   = np.array(_cam_pil) / 255.0
+
+                # ⑤ jet 컬러맵 적용 + 원본과 오버레이
+                _heatmap_rgb = _cm.get_cmap("jet")(_cam_norm)[:, :, :3]
+                _orig_arr    = np.array(_gc_img).astype(float) / 255.0
+                _overlay     = np.clip(0.55 * _orig_arr + 0.45 * _heatmap_rgb, 0, 1)
+
+                # ⑥ 시각화 — 원본 / 히트맵 / 오버레이
+                _fig, _axes = _plt.subplots(1, 3, figsize=(13, 4))
+                _titles = [
+                    f"(1) Original Image\n({_gc_label})",
+                    "(2) Grad-CAM Heatmap",
+                    f"(3) Overlay\nPred Score: {_gc_conf:.4f}",
+                ]
+                _imgs   = [
+                    np.array(_gc_img),
+                    _cam_norm,
+                    (_overlay * 255).astype(np.uint8),
+                ]
+                _cmaps  = [None, "jet", None]
+                for _ax, _im, _ti, _cmp in zip(_axes, _imgs, _titles, _cmaps):
+                    _ax.imshow(_im, cmap=_cmp)
+                    _ax.set_title(_ti, fontsize=11, pad=6)
+                    _ax.axis("off")
+                _plt.colorbar(
+                    _plt.cm.ScalarMappable(cmap="jet"), ax=_axes[1],
+                    fraction=0.046, pad=0.04, label="중요도"
+                )
+                _plt.tight_layout()
+                st.pyplot(_fig)
+                _plt.close(_fig)
+
+                # ⑦ 채널 중요도 상위 5개 표시
+                with st.expander("📊 채널별 중요도 상세 (상위 5개)"):
+                    _abs_pw = np.abs(_pooled)
+                    _top_idx = np.argsort(_abs_pw)[::-1][:5]
+                    _rel_pw = _abs_pw[_top_idx] / (_abs_pw.max() + 1e-10) * 100
+                    import pandas as _pd2
+                    st.dataframe(
+                        _pd2.DataFrame({
+                            "채널 번호": _top_idx,
+                            "기울기 평균 (raw)": [f"{v:.3e}" for v in _pooled[_top_idx]],
+                            "상대 중요도 (%)": _rel_pw.round(1),
+                        }),
+                        use_container_width=True,
+                    )
+                    st.caption("※ 마지막 Conv 레이어 기준 | 양수=강화·음수=억제 | 상대 중요도=|기울기|÷최대값×100")
+
+        except Exception as _gc_err:
+            st.warning(f"Grad-CAM 생성 실패: {_gc_err}")
