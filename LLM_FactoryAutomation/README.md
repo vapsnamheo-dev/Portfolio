@@ -115,7 +115,7 @@ streamlit run app/streamlit_femto.py
 - **딥러닝**: TensorFlow 2.x · Keras (GRU, LSTM, Autoencoder)
 - **ML**: scikit-learn (RandomForest), XGBoost
 - **RAG**: FAISS(IndexFlatIP, Level1 수치유사도) · LangChain + Chroma + BM25Retriever(Level2 Hybrid 문서RAG)
-- **임베딩**: sentence-transformers (all-MiniLM-L6-v2)
+- **임베딩**: all-MiniLM-L6-v2 (chromadb 내장 ONNX 런타임 — PyTorch·TensorFlow 프로세스 충돌 방지를 위해 sentence-transformers 패키지에서 교체, 2026-09-07)
 - **UI**: Streamlit (4개 앱)
 - **설명가능성**: SHAP (LinearExplainer, KernelExplainer)
 
