@@ -18,6 +18,7 @@
 | 5 | [DL_FactoryAutomation — 딥러닝 스마트팩토리](./DL_FactoryAutomation/README.md) | FEMTO 베어링 RUL 예측(GRU+BN+LN, OOS RMSE 810.4분 · v1 대비 16.75% 개선) + Autoencoder 이상탐지(AUC 0.968) + Milling 공구마모 분류(1D-CNN) · Streamlit 대시보드 | Python · TensorFlow · Keras · Streamlit | 개인프로젝트 | [🔗 Live](https://dlfactoryautomation.streamlit.app/) |
 | 6 | [LLM_FactoryAutomation — LLM 기반 예지보전 진단](./LLM_FactoryAutomation/README.md) | ML 열화 분류(AUC 0.99) + DL RUL 예측(GRU) + RAG(FAISS·Chroma Hybrid) 검색 결과를 이중 LLM(Claude API+로컬 Ollama)으로 자연어 정비 보고서 자동 생성 | Python · Anthropic Claude API · Ollama · FAISS · ChromaDB · Streamlit | 개인프로젝트 | [🔗 Live](https://llmfactoryautomation.streamlit.app/) |
 | 7 | [HajaCheck — AI 시설물 하자 점검](./HajaCheck/README.md) | 사진 업로드 → AI 하자 탐지·등급 산정 → LLM 보고서 초안 · 담당: 대시보드·시설물 관리 개발 + 미디어 파이프라인 오너 | Java · Spring Boot · React · PostgreSQL · LangChain | 팀프로젝트 | [🔗 Live](https://hajacheck.luma200ok.com) |
+| 8 | [개인 PR머신 — AI PR 리뷰·자동머지 게이트](https://github.com/vapsnamheo-dev/AISOURCE/blob/main/.github/workflows/pr-machine.yml) | GitHub Actions 기반 PR 자동 검수 · Claude Code Action 리뷰(P0/P1/P2 등급) · 라벨 기반 머지 차단 · develop 자동머지 / main 승격 분리 · 디스코드·슬랙·이메일 알림 | GitHub Actions · Claude Code Action · pytest | 개인프로젝트 | — |
 
 ---
 
@@ -31,6 +32,7 @@
 | 데이터 | pandas · numpy · matplotlib · seaborn · plotly |
 | 웹 백엔드 | Flask · Next.js · SQLAlchemy · REST API |
 | 웹앱 | Streamlit |
+| CI/CD | GitHub Actions · 라벨 기반 머지 게이트 · 등급별 머지 차단 정책 (개인 PR머신) |
 | 데스크톱 | PyQt6 · WASAPI 루프백 · faster-whisper |
 | DB | SQLite · MySQL · PostgreSQL |
 

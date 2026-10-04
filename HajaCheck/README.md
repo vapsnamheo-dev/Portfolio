@@ -115,7 +115,7 @@
 | **프론트** | React 18 · Vite · TypeScript · Tailwind CSS · TanStack Query |
 | **AI 서버** | Python · FastAPI · LangChain · Vision(U-Net · YOLO) · RAG(Chroma) |
 | **데이터** | PostgreSQL 16 |
-| **인프라** | OCI(자체 서버) Docker Compose + nginx · GitHub Actions CI + PR머신 자동 검수 · main 승격 CD |
+| **인프라** | OCI(자체 서버) Docker Compose + nginx · GitHub Actions CI + PR머신 자동 검수 · main 승격 CD — **담당: 정재봉(DevOps 리드, CI/CD·OCI 인프라 워크플로우 작성).** 허남은 인프라 구성 기여 없음(CI 게이트 통과용 테스트·린트 작업만) |
 
 ---
 
