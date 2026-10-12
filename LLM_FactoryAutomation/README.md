@@ -12,7 +12,7 @@ ML_FactoryAutomation(분류) → DL_FactoryAutomation(RUL 예측)의 ML+DL 기�
 센서 측정값
     |
     +-- ML 모델 (RandomForest/XGBoost) ---- 열화 확률 + 정상/열화 판정
-    +-- DL 모델 (GRU v2, BN+LN) ------------ 잔여수명(RUL) 예측 (분)
+    +-- DL 모델 (LSTM+RF 앙상블, 30분 윈도우) -- 잔여수명(RUL) 예측 (분)
     +-- RAG Level 1 (FAISS, 수치 유사도) ---- 유사 사례 Top-k 검색
     +-- RAG Level 2 (Chroma, Hybrid RAG) ---- 정비 지식 문서 검색 (BM25+벡터 50:50)
              |
@@ -39,8 +39,10 @@ ML_FactoryAutomation(분류) → DL_FactoryAutomation(RUL 예측)의 ML+DL 기�
 | RAG Level 1 | `src/femto_rag_search.py` | FAISS IndexFlatIP(코사인), 유사 사례 Top-k 검색 |
 | RAG Level 2 | `src/femto_doc_rag.py` | Chroma 벡터DB + BM25 Hybrid RAG, 정비 지식 문서 Q&A + 출처근거(Citation) 태깅 |
 | ML | `src/femto_ml.py` | RandomForest/XGBoost 열화 분류 |
-| DL | `src/femto_gru_rul.py` | GRU v2(BN+LN) RUL 회귀 |
+| DL | `src/femto_dl_rul.py` | LSTM+RandomForest 앙상블 RUL 회귀 (30분 슬라이딩 윈도우, 9피처) |
 | UI | `app/streamlit_femto.py` (외 3종) | 7탭 통합 진단 대시보드 (Tab: AI 정비 권고) |
+
+> `src/femto_gru_rul.py`(GRU v2, BN+LN)는 "아키텍처 비교(5종)" 탭에서 LSTM·BiLSTM·1D-CNN·CNN-LSTM과 성능을 비교하기 위한 모델이며, LLM 정비 권고 탭의 RUL 예측에는 연결돼 있지 않습니다.
 
 ---
 
@@ -84,7 +86,7 @@ python -m src.femto_preprocess
 
 # 5. 모델 학습
 python -m src.femto_ml
-python -m src.femto_gru_rul
+python -m src.femto_dl_rul
 python -m src.femto_rag_search       # RAG Level1 - FAISS 인덱스 빌드
 python -m src.femto_doc_rag          # RAG Level2 - Chroma 인덱스 빌드
 
@@ -99,7 +101,7 @@ streamlit run app/streamlit_femto.py
 | 모델 | 유형 | 성능 |
 |---|---|---|
 | RandomForest/XGBoost | ML 열화 분류 | AUC 0.99, Recall 0.91 (GroupKFold, 베어링 단위 분리로 검증) |
-| GRU v2 (BN+LN) | DL RUL 예측 | OOS RMSE 810분 (v1 973분 대비 -16.75%) |
+| LSTM+RF 앙상블 | DL RUL 예측 | LSTM RMSE 934분 / RF RMSE 955분 (30분 윈도우, femto_rul_results.json) |
 | Autoencoder | 비지도 이상탐지 | AUC 0.968 (라벨 불필요) |
 | FAISS RAG (Level1) | 유사 사례 검색 | 코사인 유사도, 12-dim |
 | Hybrid RAG (Level2) | 문서 검색 | BM25(키워드)+Chroma(벡터) 50:50 EnsembleRetriever |
@@ -141,7 +143,7 @@ LLM_FactoryAutomation/
 │   ├── femto_rag_search.py    # RAG Level1 - FAISS 유사 사례 검색
 │   ├── femto_doc_rag.py       # RAG Level2 - Chroma+BM25 Hybrid 문서 RAG + 출처근거 태깅
 │   ├── femto_ml.py            # ML 열화 분류 (RF/XGBoost)
-│   ├── femto_gru_rul.py       # DL RUL 예측 (GRU v2, BN+LN)
+│   ├── femto_dl_rul.py        # DL RUL 예측 (LSTM+RF 앙상블, 30분 윈도우)
 │   └── femto_preprocess.py    # 데이터 전처리
 ├── app/
 │   ├── streamlit_app.py       # DL 메인
