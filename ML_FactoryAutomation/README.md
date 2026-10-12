@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-Live_Demo-FF4B4B?logo=streamlit&logoColor=white)](https://mlfactoryautomation.streamlit.app/)
-[![XGBoost](https://img.shields.io/badge/XGBoost-ROC--AUC_0.97-2ECC71)](https://xgboost.readthedocs.io)
+[![XGBoost](https://img.shields.io/badge/XGBoost-ROC--AUC_0.985-2ECC71)](https://xgboost.readthedocs.io)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?logo=scikitlearn&logoColor=white)](https://scikit-learn.org)
 [![License](https://img.shields.io/badge/Data-AI4I_2020_CC_BY_4.0-lightgrey)](https://archive.ics.uci.edu/dataset/601/ai4i+2020+predictive+maintenance+dataset)
 
@@ -341,9 +341,9 @@ CREATE TABLE model_registry (
 
 | 모델 | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **XGBoost** ⭐ | 0.9790 | 0.6548 | 0.8088 | 0.7237 | **0.9706** |
-| RandomForest | 0.9830 | 0.8269 | 0.6324 | 0.7167 | 0.9611 |
-| LogisticRegression | 0.8250 | 0.1421 | 0.8235 | 0.2424 | 0.9069 |
+| **XGBoost** ⭐ | 0.9880 | 0.8333 | 0.8088 | 0.8209 | **0.9847** |
+| RandomForest | 0.9920 | 0.9483 | 0.8088 | 0.8730 | 0.9783 |
+| LogisticRegression | 0.8595 | 0.1802 | 0.8824 | 0.2993 | 0.9385 |
 
 XGBoost 채택 이유: ROC-AUC 최고 + 불균형 데이터 `scale_pos_weight` 지원
 
